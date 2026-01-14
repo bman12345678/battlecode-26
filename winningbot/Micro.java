@@ -67,7 +67,7 @@ public final class Micro {
         if (bestEnemy != null)
             return bite(rc, bestEnemy, false);
         if (bestCat != null)
-            return (cntt > 2 ? bite(rc, bestCat, true) : kiteCat(rc, bestCat));
+            return ((cntt > 2 || rc.readSharedArray(5)==1) ? bite(rc, bestCat, true) : kiteCat(rc, bestCat));
 
         return false;
     }

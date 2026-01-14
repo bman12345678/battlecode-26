@@ -52,12 +52,16 @@ public final class BabyLogic {
 
         /* ---- combat first ---- */
         Micro.tryAttack(rc, robots);
-
-        /* ---- flee cats (movement-safe) ---- */
-        if (catNear && rc.isMovementReady()) {
-            Nav.fleeFrom(rc, threatLoc);
-            return;
+        if (rc.readSharedArray(5)==1) Nav.move(rc,readKing(rc));
+        if (rc.readSharedArray(6)==1 && rc.getID()%3!=0) Nav.move(rc,readKing(rc));
+        if (enemyKing !=null) {
+            Nav.move(rc, enemyKing);
         }
+        /* ---- flee cats (movement-safe) ---- */
+//        if (catNear && rc.isMovementReady()) {
+//            Nav.fleeFrom(rc, threatLoc);
+//            return;
+//        }
 
         /* ---- update cheese mine info ---- */
         MapInfo[] mps = rc.senseNearbyMapInfos();

@@ -84,10 +84,9 @@ public final class KingLogic {
         // If we cannot act at all, return
 
         // Movement priority: escape threats first (movement)
-        if (rc.canMove(Direction.NORTH) || rc.canMove(Direction.EAST) || rc.canMove(Direction.SOUTH) || rc.canMove(Direction.WEST)
-                || rc.canMove(Direction.NORTHEAST) || rc.canMove(Direction.SOUTHEAST) || rc.canMove(Direction.SOUTHWEST) || rc.canMove(Direction.NORTHWEST)) {
-            // attempt escape if needed (uses rc.canMove inside)
-            escapeIfThreatened();
+
+        if (!escapeIfThreatened()) {
+            rc.writeSharedArray(5,0); rc.writeSharedArray(6,0);
         }
 
         // Action: try to box self (placing dirt) if sensible
@@ -274,9 +273,11 @@ public final class KingLogic {
         }
 
         if (nearestCat != null && nearestCatDist <= CAT_ESCAPE_DIST_SQ) {
+            rc.writeSharedArray(5, 1);
             return fleeFrom(nearestCat);
         }
         if (nearestRat != null && nearestRatDist <= RAT_ESCAPE_DIST_SQ) {
+            rc.writeSharedArray(6, 1);
             return fleeFrom(nearestRat);
         }
         return false;
