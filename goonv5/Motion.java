@@ -4,6 +4,10 @@ import battlecode.common.Clock;
 import battlecode.common.Direction;
 import battlecode.common.MapInfo;
 import battlecode.common.MapLocation;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Random;
+
 
 public class Motion {
     public static final int TOWARDS = 0;
@@ -20,6 +24,40 @@ public class Motion {
 
     public static Direction lastRandomDir = Direction.CENTER;
     public static MapLocation lastRandomSpread;
+    // visual-only turn scheduling (per-robot)
+    private static final Map<Integer,Integer> visualTurnInterval = new HashMap<>();   // 2..4
+    private static final Map<Integer,Integer> visualTurnCounter  = new HashMap<>();   // counts calls
+    private static final Map<Integer,Boolean> visualTurnDirRight  = new HashMap<>();  // true => next turn is right90, false => left90
+    private static final long VISUAL_SEED_MIX = 0x9E3779B97F4A7C15L;
+
+    private static int getOrCreateInterval(int id) {
+        Integer v = visualTurnInterval.get(id);
+        if (v != null) return v;
+        // stable pseudo-random but deterministic per robot id
+        long seed = ((long)id * 1103515245L) ^ VISUAL_SEED_MIX;
+        Random r = new Random(seed);
+        int interval = 4 + r.nextInt(2); // 2..4 inclusive
+        visualTurnInterval.put(id, interval);
+        visualTurnCounter.put(id, 0);
+        visualTurnDirRight.put(id, r.nextBoolean()); // pick starting side deterministically
+        return interval;
+    }
+
+    /** increment counter and return true if we should perform a visual turn now */
+    private static boolean visualShouldTurnNow(int id) {
+        int interval = getOrCreateInterval(id);
+        int c = visualTurnCounter.getOrDefault(id, 0) + 1;
+        visualTurnCounter.put(id, c);
+        return (c % interval) == 0;
+    }
+
+    /** toggle the next visual turn side (right <-> left) and return the side that was used */
+    private static boolean visualConsumeToggleSide(int id) {
+        boolean cur = visualTurnDirRight.getOrDefault(id, true);
+        visualTurnDirRight.put(id, !cur);
+        return cur;
+    }
+
 
     // common distance stuff
     public static int getManhattanDistance(MapLocation a, MapLocation b) {
@@ -169,226 +207,16 @@ public class Motion {
     }
 
     // bugnav helpers
-    public static MapLocation bugnavTarget;
-    public static int bugnavMode = -1;
-
-    public static int minDistanceToTarget;
-    public static int maxDistanceFromTarget;
-    public static int minCircleDistance;
-    public static int maxCircleDistance;
-    public static boolean obstacleOnRight;
-    public static MapLocation currentObstacle;
     public static StringBuilder visitedList = new StringBuilder();
 
-    public static Direction bug2Helper(MapLocation me, MapLocation target, int mode, int minCircleDistance1,
-                                       int maxCircleDistance1) throws Exception {
-        boolean stuck = true;
-        for (int i = 8; --i >= 0;) {
-            if (G.rc.canMove(G.DIRECTIONS[i])) {
-                stuck = false;
-                break;
-            }
-        }
-
-        if (stuck) {
-            return Direction.CENTER;
-        }
-
-        if (bugnavTarget == null || !bugnavTarget.equals(target) || bugnavMode != mode) {
-            reset();
-        }
-        bugnavTarget = target;
-        bugnavMode = mode;
-        minCircleDistance = minCircleDistance1;
-        maxCircleDistance = maxCircleDistance1;
-
-        int distanceToTarget = getChebyshevDistance(G.me, target);
-        switch (bugnavMode) {
-            case TOWARDS:
-                if (distanceToTarget < minDistanceToTarget) {
-                    reset();
-                    minDistanceToTarget = distanceToTarget;
-                }
-                break;
-            case AWAY:
-                if (distanceToTarget > maxDistanceFromTarget) {
-                    reset();
-                    maxDistanceFromTarget = distanceToTarget;
-                }
-                break;
-            case AROUND:
-                // kind of approximation
-                // probably wont circle around something with very large radius?
-                int dist = G.me.distanceSquaredTo(bugnavTarget);
-                if (dist < minCircleDistance) {
-                    if (distanceToTarget > maxDistanceFromTarget) {
-                        reset();
-                        maxDistanceFromTarget = distanceToTarget;
-                    }
-                } else if (dist > maxCircleDistance) {
-                    if (distanceToTarget < minDistanceToTarget) {
-                        reset();
-                        minDistanceToTarget = distanceToTarget;
-                    }
-                }
-                break;
-        }
-
-        if (currentObstacle != null && G.rc.canSenseLocation(currentObstacle)
-                && G.rc.sensePassability(currentObstacle) && !G.rc.canSenseRobotAtLocation(currentObstacle)) {
-            reset();
-        }
-
-        if (visitedList.indexOf("" + getState()) != -1) {
-            reset();
-        }
-        visitedList.append("" + getState());
-
-        Direction targetDirection = getTargetDirection();
-
-        if (currentObstacle == null) {
-            if (canMove(targetDirection)) {
-                return targetDirection;
-            }
-
-            setInitialDirection(targetDirection);
-        }
-
-        return followWall(true);
-    }
-
-    public static void reset() {
-        minDistanceToTarget = Integer.MAX_VALUE;
-        maxDistanceFromTarget = 0;
-        obstacleOnRight = true;
-        currentObstacle = null;
-        visitedList = new StringBuilder();
-    }
-
-    public static Direction getTargetDirection() throws Exception {
-        if (G.me.equals(bugnavTarget)) {
-            if (bugnavMode == AROUND) {
-                return Direction.EAST;
-            } else {
-                return Direction.CENTER;
-            }
-        }
-        Direction direction = G.me.directionTo(bugnavTarget);
-        switch (bugnavMode) {
-            case AWAY:
-                direction = direction.opposite();
-                break;
-            case AROUND:
-                int dist = G.me.distanceSquaredTo(bugnavTarget);
-                if (dist < minCircleDistance) {
-                    direction = direction.opposite();
-                } else if (dist <= maxCircleDistance) {
-                    direction = direction.rotateLeft().rotateLeft();
-                    if (circleDirection == COUNTER_CLOCKWISE) {
-                        direction = direction.opposite();
-                    }
-
-                    if (!canMove(direction)) {
-                        direction = direction.opposite();
-                        circleDirection *= -1;
-                    }
-                }
-                break;
-        }
-        return direction;
-    }
-
-    public static void setInitialDirection(Direction forward) throws Exception {
-        Direction left = forward.rotateLeft();
-        for (int i = 8; --i >= 0;) {
-            MapLocation location = G.rc.adjacentLocation(left);
-            if(G.rc.canSenseLocation(location)) {
-                if (G.rc.onTheMap(location) && G.rc.sensePassability(location) && !G.rc.canSenseRobotAtLocation(location)) {
-                    break;
-                }
-            }
-
-            left = left.rotateLeft();
-        }
-
-        Direction right = forward.rotateRight();
-        for (int i = 8; --i >= 0;) {
-            MapLocation location = G.rc.adjacentLocation(right);
-            if(G.rc.canSenseLocation(location)) {
-                if (G.rc.onTheMap(location) && G.rc.sensePassability(location) && !G.rc.canSenseRobotAtLocation(location)) {
-                    break;
-                }
-            }
-
-            right = right.rotateRight();
-        }
-
-        // TODO: add paint weightings
-
-        MapLocation leftLocation = G.rc.adjacentLocation(left);
-        MapLocation rightLocation = G.rc.adjacentLocation(right);
-
-        int leftDistance = getChebyshevDistance(leftLocation, bugnavTarget);
-        int rightDistance = getChebyshevDistance(rightLocation, bugnavTarget);
-
-        if (leftDistance == rightDistance) {
-            obstacleOnRight = (G.rng.nextBoolean());
-        } else if (leftDistance < rightDistance) {
-            obstacleOnRight = true;
-        } else if (rightDistance < leftDistance) {
-            obstacleOnRight = false;
-        } else {
-            obstacleOnRight = G.me.distanceSquaredTo(leftLocation) < G.me.distanceSquaredTo(rightLocation);
-        }
-
-        if (obstacleOnRight) {
-            currentObstacle = G.rc.adjacentLocation(left.rotateRight());
-        } else {
-            currentObstacle = G.rc.adjacentLocation(right.rotateLeft());
-        }
-    }
-
-    public static Direction followWall(boolean canRotate) throws Exception {
-        Direction direction = G.rc.getLocation().directionTo(currentObstacle);
-
-        for (int i = 8; --i >= 0;) {
-            direction = obstacleOnRight ? direction.rotateLeft() : direction.rotateRight();
-            if (canMove(direction)) {
-                return direction;
-            }
-
-            MapLocation location = G.rc.adjacentLocation(direction);
-            if(G.rc.canSenseLocation(location) == false) continue;
-            if (canRotate && !G.rc.onTheMap(location)) {
-                obstacleOnRight = !obstacleOnRight;
-                return followWall(false);
-            }
-
-            if (G.rc.onTheMap(location)
-                    && (!G.rc.sensePassability(location) || G.rc.canSenseRobotAtLocation(location))) {
-                currentObstacle = location;
-            }
-        }
-        return Direction.CENTER;
-    }
-
-    public static char getState() {
-        Direction direction = G.me.directionTo(currentObstacle != null ? currentObstacle : bugnavTarget);
-        int rotation = obstacleOnRight ? 1 : 0;
-
-        return (char) ((((G.me.x << 6) | G.me.y) << 4) | (direction.ordinal() << 1) |
-                rotation);
-    }
-
     public static int[] simulateMovement(MapLocation me, MapLocation dest) throws Exception {
-        MapLocation clockwiseLoc = G.rc.getLocation();
+        MapLocation clockwiseLoc = goonv5.G.rc.getLocation();
         Direction clockwiseLastDir = lastDir;
         int clockwiseStuck = 0;
-        MapLocation counterClockwiseLoc = G.rc.getLocation();
+        MapLocation counterClockwiseLoc = goonv5.G.rc.getLocation();
         Direction counterClockwiseLastDir = lastDir;
         int counterClockwiseStuck = 0;
         search: for (int t = 0; t < 10; t++) {
-            // search: for (int t = 0; t < 2; t++) {
             if (clockwiseLoc.equals(dest)) {
                 break;
             }
@@ -399,12 +227,12 @@ public class Motion {
             {
                 for (int i = 9; --i >= 0;) {
                     MapLocation loc = clockwiseLoc.add(clockwiseDir);
-                    if (G.rc.onTheMap(loc)) {
-                        if (!G.rc.canSenseLocation(loc)) {
+                    if (goonv5.G.rc.onTheMap(loc)) {
+                        if (!goonv5.G.rc.canSenseLocation(loc)) {
                             break search;
                         }
-                        if (clockwiseDir != clockwiseLastDir.opposite() && G.rc.senseMapInfo(loc).isPassable()
-                                && G.rc.senseRobotAtLocation(loc) == null) {
+                        if (clockwiseDir != clockwiseLastDir.opposite() && goonv5.G.rc.senseMapInfo(loc).isPassable()
+                                && goonv5.G.rc.senseRobotAtLocation(loc) == null) {
                             clockwiseLastDir = clockwiseDir;
                             break;
                         }
@@ -420,12 +248,12 @@ public class Motion {
             {
                 for (int i = 9; --i >= 0;) {
                     MapLocation loc = counterClockwiseLoc.add(counterClockwiseDir);
-                    if (G.rc.onTheMap(loc)) {
-                        if (!G.rc.canSenseLocation(loc)) {
+                    if (goonv5.G.rc.onTheMap(loc)) {
+                        if (!goonv5.G.rc.canSenseLocation(loc)) {
                             break search;
                         }
                         if (counterClockwiseDir != counterClockwiseLastDir.opposite()
-                                && G.rc.senseMapInfo(loc).isPassable() && G.rc.senseRobotAtLocation(loc) == null) {
+                                && goonv5.G.rc.senseMapInfo(loc).isPassable() && goonv5.G.rc.senseRobotAtLocation(loc) == null) {
                             counterClockwiseLastDir = counterClockwiseDir;
                             break;
                         }
@@ -447,8 +275,7 @@ public class Motion {
         return new int[] { clockwiseDist, clockwiseStuck, counterClockwiseDist, counterClockwiseStuck };
     }
 
-    public static Direction bug2Helper(MapLocation me, MapLocation me2, MapLocation dest, int mode,
-                                       int minRadiusSquared, int maxRadiusSquared) throws Exception {
+    public static Direction bug2Helper(MapLocation me, MapLocation dest, int mode, int minRadiusSquared, int maxRadiusSquared) throws Exception {
         Direction direction = me.directionTo(dest);
         if (me.equals(dest)) {
             if (mode == AROUND) {
@@ -473,9 +300,8 @@ public class Motion {
 
         boolean stuck = true;
         for (int i = 4; --i >= 0;) {
-            String m = me + " " + i + " ";
-            if (visitedList.indexOf(m) == -1) {
-                visitedList.append(m);
+            if (!visitedList.toString().contains(me + " " + i + " ")) {
+                visitedList.append(me + " " + i + " ");
                 stuck = false;
                 break;
             }
@@ -488,7 +314,7 @@ public class Motion {
 
         // G.indicatorString.append("DIR=" + direction + " ");
         if (optimalDir != Direction.CENTER && mode != AROUND) {
-            if (canMove(optimalDir) && lastDir != optimalDir.opposite()) {
+            if (goonv5.G.rc.canMove(optimalDir) && lastDir != optimalDir.opposite()) {
                 optimalDir = Direction.CENTER;
                 rotation = NONE;
                 visitedList = new StringBuilder();
@@ -503,7 +329,7 @@ public class Motion {
         // G.indicatorString.append("OFF: " + G.rc.onTheMap(me.add(direction)) + " ");
 
         if (lastDir != direction.opposite()) {
-            if (canMove(direction)) {
+            if (goonv5.G.rc.canMove(direction)) {
                 // if (!lastBlocked) {
                 // rotation = NONE;
                 // }
@@ -523,14 +349,14 @@ public class Motion {
                 // }
                 return direction;
             }
-        } else if (canMove(direction)) {
+        } else if (goonv5.G.rc.canMove(direction)) {
             Direction dir;
             if (rotation == CLOCKWISE) {
                 dir = direction.rotateRight();
             } else {
                 dir = direction.rotateLeft();
             }
-            if (!G.rc.onTheMap(me.add(dir))) {
+            if (!goonv5.G.rc.onTheMap(me.add(dir))) {
                 // boolean touchingTheWallBefore = false;
                 // for (int i = DIRECTIONS.length; --i>=0;) {
                 // MapLocation translatedMapLocation = me.add(d);
@@ -548,7 +374,7 @@ public class Motion {
                 return direction;
             }
         }
-        if (!G.rc.onTheMap(me.add(direction))) {
+        if (!goonv5.G.rc.onTheMap(me.add(direction))) {
             if (mode == AROUND) {
                 circleDirection *= -1;
                 direction = direction.opposite();
@@ -556,7 +382,7 @@ public class Motion {
             } else {
                 direction = me.directionTo(dest);
             }
-            if (canMove(direction)) {
+            if (goonv5.G.rc.canMove(direction)) {
                 return direction;
             }
         }
@@ -567,11 +393,6 @@ public class Motion {
 
         // G.indicatorString.append("ROTATION=" + rotation + " ");
         if (rotation == NONE) {
-            // if (G.rng.nextInt(2) == 0) {
-            // rotation = CLOCKWISE;
-            // } else {
-            // rotation = COUNTER_CLOCKWISE;
-            // }
             int[] simulated = simulateMovement(me, dest);
 
             int clockwiseDist = simulated[0];
@@ -579,8 +400,7 @@ public class Motion {
             boolean clockwiseStuck = simulated[1] == 1;
             boolean counterClockwiseStuck = simulated[3] == 1;
 
-            // G.indicatorString.append("DIST=" + clockwiseDist + " " +
-            // counterClockwiseDist
+            // G.indicatorString.append("DIST=" + clockwiseDist + " " + counterClockwiseDist
             // + " ");
             int tempMode = mode;
             if (mode == AROUND) {
@@ -624,22 +444,22 @@ public class Motion {
             } else {
                 direction = direction.rotateLeft();
             }
-            if (!G.rc.onTheMap(me.add(direction))) {
+            if (!goonv5.G.rc.onTheMap(me.add(direction))) {
                 flip = true;
             }
             // if (G.rc.onTheMap(me.add(direction)) &&
             // G.rc.senseMapInfo(me.add(direction)).isPassable() && lastDir !=
             // direction.opposite()) {
-            // if (canMove(direction)) {
+            // if (G.rc.canMove(direction)) {
             // return direction;
             // }
             // return Direction.CENTER;
             // }
-            if (canMove(direction) && lastDir != direction.opposite()) {
+            if (goonv5.G.rc.canMove(direction) && lastDir != direction.opposite()) {
                 if (flip) {
                     rotation *= -1;
                 }
-                if (canMove(direction)) {
+                if (goonv5.G.rc.canMove(direction)) {
                     return direction;
                 }
                 return Direction.CENTER;
@@ -648,11 +468,12 @@ public class Motion {
         if (flip) {
             rotation *= -1;
         }
-        if (canMove(lastDir.opposite())) {
+        if (goonv5.G.rc.canMove(lastDir.opposite())) {
             return lastDir.opposite();
         }
         return Direction.CENTER;
     }
+
     // bugnav
 
     public static void bugnavTowards(MapLocation dest) throws Exception {
@@ -663,11 +484,30 @@ public class Motion {
         bugnavTowards(dest, defaultMicroNoTurn);
     }
     public static void bugnavTowards(MapLocation dest, Micro m) throws Exception {
-        if (goonv5.G.rc.isMovementReady()) {
-            Direction d = bug2Helper(goonv5.G.rc.getLocation(), dest, TOWARDS, 0, 0);
+        if (G.rc.isMovementReady()) {
+            Direction d = bug2Helper(G.rc.getLocation(), dest, TOWARDS, 0, 0);
             if (d == Direction.CENTER) {
-                d = goonv5.G.rc.getLocation().directionTo(dest);
+                d = G.rc.getLocation().directionTo(dest);
             }
+
+            // visual-only 90° turns on a per-robot interval (2..4)
+            if (d != Direction.CENTER) {
+                int id = G.rc.getID();
+                if (visualShouldTurnNow(id)) {
+                    boolean right = visualConsumeToggleSide(id); // returns the side to use now
+                    Direction altD;
+                    if (right) altD = d.rotateRight().rotateRight(); // 90° right
+                    else       altD = d.rotateLeft().rotateLeft();   // 90° left
+                    try {
+                        // Motion.turn safely checks canTurn()
+                        Motion.turn(altD);
+                    } catch (Exception ex) {
+                        // ignore turn failure; do not affect movement
+                    }
+                }
+            }
+
+            // still move in the real computed direction
             m.micro(d, dest);
         }
     }
