@@ -2,16 +2,19 @@ package goonv5;
 
 import battlecode.common.*;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
+import java.util.Random;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class RatKing {
     private static MapLocation targetCorner = null;
     private static boolean reachedCorner = false;
     private static final int TARGET_RAT_COST = 60;
     private static Set<MapLocation> mines = new HashSet<>();
+    private static final double DIAG_WEIGHT = 1.6; // how much more we prefer diagonal directions
 
 
     public static void run() throws Exception {
@@ -22,43 +25,6 @@ public class RatKing {
 
         // Write king location to shared array every round
         writeLocationToSharedArray();
-
-
-        List<MapLocation> kings = new ArrayList<>();
-        for(int i = 0; i < 21; i++) {
-
-            int roundNum = G.rc.readSharedArray(3*i) - 10;
-            if(roundNum == 0) continue;
-
-            if(G.rc.getRoundNum() % 1000 == roundNum || (G.rc.getRoundNum() + 999) %1000 == roundNum || (G.rc.getRoundNum() + 1) %1000 == roundNum) {
-                kings.add(new MapLocation(G.rc.readSharedArray(3 * i + 1), G.rc.readSharedArray(3 * i + 2)));
-            }
-        }
-
-
-
-
-        // Spawn rats until we have 20
-        if(G.rc.getCurrentRatCost() <= 100) {
-
-            if (G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1800) {
-                spawnRats();
-            }
-            else if(G.rc.getCurrentRatCost() <= 40 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1600) {
-                spawnRats();
-            }
-            else if(G.rc.getCurrentRatCost() <= 30 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1200) {
-                spawnRats();
-            }
-            else if(G.rc.getCurrentRatCost() <= 20 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 800) {
-                spawnRats();
-            }
-            else if(G.rc.getCurrentRatCost() <= 10) {
-                spawnRats();
-            }
-        }
-
-
 
         // Check for nearby cats
         RobotInfo[] nearbyEnemies = G.rc.senseNearbyRobots(-1);
@@ -71,18 +37,18 @@ public class RatKing {
             if (enemy.getTeam() != G.rc.getTeam()) {
                 cnt += 1;
                 if (closestCat == null ||
-                    G.me.distanceSquaredTo(enemy.location) < G.me.distanceSquaredTo(closestCat.location)) {
+                        G.me.distanceSquaredTo(enemy.location) < G.me.distanceSquaredTo(closestCat.location)) {
                     closestCat = enemy;
                 }
 
                 if(enemy.team == G.opponentTeam) {
-                    G.rc.writeSharedArray(63, G.rc.getID() % 21);
+                    G.rc.writeSharedArray(63, 1);
                 }
             }
         }
 
         if(cnt == 0) {
-            G.rc.writeSharedArray(63, 1023);
+            G.rc.writeSharedArray(63, 0);
         }
 
         // If we see a cat, place dirt to block it and run away
@@ -92,40 +58,49 @@ public class RatKing {
         } else {
             // No cat visible, navigate to corner
             if (!reachedCorner) {
-                //navigateToCorner();
+//                navigateToCorner();
+            }
+        }
+
+        boolean seesMine = false;
+        for(MapInfo m : G.rc.senseNearbyMapInfos(9)) {
+            if(m.hasCheeseMine() || m.isWall()) {
+                seesMine = true;
+            }
+        }
+
+        if(!seesMine) {
+            for (RobotInfo r : G.rc.senseNearbyRobots(-1)) {
+                if (r.getType().isBabyRatType() && r.getTeam() != G.opponentTeam && r.getRawCheeseAmount() > 0) {
+                    Direction d = G.me.directionTo(r.getLocation());
+                    if (G.rc.canMove(d)) G.rc.move(d);
+                }
             }
         }
 
 
-        MapInfo[] infos = G.rc.senseNearbyMapInfos(13);
+        // Spawn rats until we have 20
+        if(G.rc.getCurrentRatCost() <= 100) {
 
-
-
-            for (RobotInfo r : G.rc.senseNearbyRobots(-1)) {
-                if (r.getType().isBabyRatType() && r.getTeam() != G.opponentTeam && r.getRawCheeseAmount() > 0) {
-                    Direction d = G.me.directionTo(r.getLocation());
-
-                    boolean shouldGo = true;
-                    for(MapInfo m : infos) {
-                        if((G.me.directionTo(m.getMapLocation()) == d || G.me.directionTo(m.getMapLocation()) == d.rotateLeft() ||  G.me.directionTo(m.getMapLocation()) == d.rotateRight())&& (m.isWall() || m.hasCheeseMine())) {
-                            shouldGo = false;
-                            break;
-                        }
-                    }
-                    if (G.rc.canMove(d) && shouldGo) G.rc.move(d);
-                }
+            if (G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1650 && G.rc.getRoundNum()<75) {
+                spawnRats();
             }
-
-            for(MapLocation k : kings) {
-                if(kings.size() > 1 && k != G.rc.getLocation() && k.isWithinDistanceSquared(G.rc.getLocation(), 25)) {
-                    Motion.bugnavAway(k);
-                }
+            else if (G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1250) {
+                spawnRats();
             }
-
-
-
-
-
+            else if(G.rc.getCurrentRatCost() <= 40 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 1100) {
+                spawnRats();
+            }
+            else if(G.rc.getCurrentRatCost() <= 30 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 800) {
+                spawnRats();
+            }
+            else if(G.rc.getCurrentRatCost() <= 20 && G.rc.getGlobalCheese() - G.rc.getCurrentRatCost() >= 400) {
+                spawnRats();
+            }
+            else if(G.rc.getCurrentRatCost() <= 10) {
+                spawnRats();
+            }
+        }
 
 
     }
@@ -142,37 +117,6 @@ public class RatKing {
     }
 
 
-    private static void spawnRats() throws Exception {
-        // King is 3x3, so we need to check locations further out
-        // Try spawning at distance 2 in all directions to clear the 3x3 body
-        //if(G.rc.getRoundNum() % 3 == 0) return;
-        for (int i = 0; i < G.DIRECTIONS.length; i++) {
-            int realIndex = (i + G.rc.getRoundNum()) % 8;
-            Direction dir = G.DIRECTIONS[realIndex];
-
-            MapLocation spawnLoc = G.me.add(dir).add(dir); // 2 steps away
-            if (G.rc.canBuildRat(spawnLoc)) {
-                G.rc.buildRat(spawnLoc);
-                G.indicatorString.append("SPAWN ");
-                return;
-            }
-        }
-
-        // If that fails, try adjacent locations around the 3x3 perimeter
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                if (Math.abs(dx) == 2 || Math.abs(dy) == 2) {
-                    MapLocation spawnLoc = G.me.translate(dx, dy);
-                    if (G.rc.canBuildRat(spawnLoc)) {
-                        G.rc.buildRat(spawnLoc);
-                        G.indicatorString.append("SPAWN ");
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
     private static MapLocation getClosestCorner() {
         int mapWidth = G.rc.getMapWidth();
         int mapHeight = G.rc.getMapHeight();
@@ -180,10 +124,10 @@ public class RatKing {
         // King is 3x3, so adjust corners to account for size
         // Center of king should be at least 1 away from edges
         MapLocation[] corners = {
-            new MapLocation(1, 1),
-            new MapLocation(1, mapHeight - 2),
-            new MapLocation(mapWidth - 2, 1),
-            new MapLocation(mapWidth - 2, mapHeight - 2)
+                new MapLocation(1, 1),
+                new MapLocation(1, mapHeight - 2),
+                new MapLocation(mapWidth - 2, 1),
+                new MapLocation(mapWidth - 2, mapHeight - 2)
         };
 
         MapLocation closest = corners[0];
@@ -255,5 +199,118 @@ public class RatKing {
 
 
         G.indicatorString.append("FLEE ");
+    }
+
+    private static void spawnRats() throws Exception {
+        // King's location (G.me is the king map location in your code)
+        MapLocation king = G.me;
+        int mapW = G.rc.getMapWidth();
+        int mapH = G.rc.getMapHeight();
+
+        // compute how many steps are available in each direction (distance to border along that ray)
+        double[] weights = new double[G.DIRECTIONS.length];
+        for (int i = 0; i < G.DIRECTIONS.length; i++) {
+            Direction dir = G.DIRECTIONS[i];
+            MapLocation probe = king;
+            int steps = 0;
+            // count how many consecutive on-map tiles are reachable stepping in dir
+            while (true) {
+                MapLocation nxt = probe.add(dir);
+                if (nxt.x < 0 || nxt.x >= mapW || nxt.y < 0 || nxt.y >= mapH) break;
+                steps++;
+                probe = nxt;
+                // safety cap
+                if (steps > Math.max(mapW, mapH)) break;
+            }
+            // boost diagonals so NE/NW/SE/SW are preferred more heavily
+            boolean isDiag = (dir == Direction.NORTHEAST || dir == Direction.NORTHWEST
+                    || dir == Direction.SOUTHEAST || dir == Direction.SOUTHWEST);
+            double w = steps;
+            if (isDiag) w *= DIAG_WEIGHT;
+            // small floor so even very short dirs have tiny chance
+            weights[i] = Math.max(0.1, w);
+        }
+
+        // Weighted-random pick (seeded by round & king pos so it's varied but reproducible)
+        long seed = ((long)G.rc.getRoundNum() << 32) ^ (((long)king.x << 16) ^ king.y) ^ 0x9E3779B97F4A7C15L;
+        Random rnd = new Random(seed);
+
+        double totalWeight = 0.0;
+        for (double w : weights) totalWeight += w;
+
+        // fallback to simple loop if something odd happened
+        if (totalWeight <= 0.0) {
+            for (int i = 0; i < G.DIRECTIONS.length; i++) {
+                int realIndex = (i + G.rc.getRoundNum()) % 8;
+                Direction dir = G.DIRECTIONS[realIndex];
+                MapLocation spawnLoc = G.me.add(dir).add(dir); // 2 steps away
+                if (G.rc.canBuildRat(spawnLoc)) {
+                    G.rc.buildRat(spawnLoc);
+                    G.indicatorString.append("SPAWN ");
+                    return;
+                }
+            }
+        } else {
+            double r = rnd.nextDouble() * totalWeight;
+            double acc = 0.0;
+            int chosenIndex = -1;
+            for (int i = 0; i < weights.length; i++) {
+                acc += weights[i];
+                if (r <= acc) { chosenIndex = i; break; }
+            }
+            if (chosenIndex == -1) chosenIndex = 0;
+
+            // Build an ordered list of direction indices sorted by descending weight.
+            ArrayList<Integer> order = new ArrayList<>();
+            for (int i = 0; i < weights.length; i++) order.add(i);
+            Collections.sort(order, new Comparator<Integer>() {
+                public int compare(Integer a, Integer b) {
+                    return Double.compare(weights[b], weights[a]);
+                }
+            });
+
+            // Try the randomly chosen dir first. If blocked, try other directions in descending weight order.
+            ArrayList<Integer> tryList = new ArrayList<>();
+            tryList.add(chosenIndex);
+            for (int idx : order) if (idx != chosenIndex) tryList.add(idx);
+
+            for (int idx : tryList) {
+                Direction dir = G.DIRECTIONS[idx];
+                // prefer spawning 2 steps away; if not enough room, spawn as far as possible up to 2
+                int maxSteps = 2;
+                MapLocation probe = king;
+                int stepsAvailable = 0;
+                for (int s = 0; s < maxSteps; s++) {
+                    MapLocation nxt = probe.add(dir);
+                    if (nxt.x < 0 || nxt.x >= mapW || nxt.y < 0 || nxt.y >= mapH) break;
+                    probe = nxt;
+                    stepsAvailable++;
+                }
+                if (stepsAvailable == 0) continue; // can't spawn in this direction at all
+
+                MapLocation spawnLoc = king;
+                for (int s = 0; s < stepsAvailable; s++) spawnLoc = spawnLoc.add(dir); // 1..2 steps
+                if (G.rc.canBuildRat(spawnLoc)) {
+                    G.rc.buildRat(spawnLoc);
+                    G.indicatorString.append("SPAWN ");
+                    return;
+                }
+                // else try next best dir
+            }
+        }
+
+        // If 2-step (or 1-step) tries all failed, fallback to trying the 3x3 perimeter spots (original fallback)
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                if (Math.abs(dx) == 2 || Math.abs(dy) == 2) {
+                    MapLocation spawnLoc = G.me.translate(dx, dy);
+                    if (G.rc.canBuildRat(spawnLoc)) {
+                        G.rc.buildRat(spawnLoc);
+                        G.indicatorString.append("SPAWN ");
+                        return;
+                    }
+                }
+            }
+        }
     }
 }
