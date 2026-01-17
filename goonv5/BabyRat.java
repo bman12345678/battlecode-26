@@ -91,7 +91,6 @@ public class BabyRat {
 
 
         if(G.rc.getCarrying() != null)  {
-            roundsCarrying += 1;
             if(roundsCarrying >= 8) {
                 Motion.turn(G.rc.getDirection().opposite());
             }
@@ -510,7 +509,7 @@ public class BabyRat {
 
 
 
-        if(G.rc.getCurrentRatCost() > 80 && G.rc.getGlobalCheese() > 1500 && G.rc.getRoundNum() < 1200) {
+        if(G.rc.getCurrentRatCost() > 100 && G.rc.getGlobalCheese() > 2000 && G.rc.getRoundNum() < 1200) {
 
             if(enemyRobots.length == 0) G.rc.squeak(16384 * (1024 * (1024 * G.rc.getLocation().x + G.rc.getLocation().y) + G.rc.getID()) + 1);
 
@@ -559,19 +558,22 @@ public class BabyRat {
                 if (G.rc.getLocation().distanceSquaredTo(c.getMapLocation()) < bestCheese) {
                     closestCheese = c.getMapLocation();
                     bestCheese = G.rc.getLocation().distanceSquaredTo(c.getMapLocation());
+                    if(G.rc.canPickUpCheese(closestCheese) && G.rc.getRawCheese()<100) {
+                        G.rc.pickUpCheese(closestCheese);
+                    }
                 }
             }
         }
 
         if (closestCheese != null && G.rc.getRawCheese() <= 100) {
-            Motion.bugnavTowards(closestCheese);
+            if(G.rc.getRawCheese()<70) Motion.bugnavTowards(closestCheese);
             if(G.rc.canPickUpCheese(closestCheese)) {
                 G.rc.pickUpCheese(closestCheese);
             }
         }
         else if(G.rc.getRawCheese() > 0) {
 
-            Motion.bugnavTowards(king);
+            Motion2.bugnavTowards(king);
 
             for(Direction d : Direction.allDirections()) {
                 if(G.rc.canTransferCheese(king.add(d), G.rc.getRawCheese())) {
@@ -795,4 +797,3 @@ public class BabyRat {
         }
     }
 }
-

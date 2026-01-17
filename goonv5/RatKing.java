@@ -58,7 +58,7 @@ public class RatKing {
         } else {
             // No cat visible, navigate to corner
             if (!reachedCorner) {
-//                navigateToCorner();
+                //navigateToCorner();
             }
         }
 

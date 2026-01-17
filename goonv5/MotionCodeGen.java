@@ -183,9 +183,9 @@ public class MotionCodeGen {
         goonv5.Motion.bfsCurr[6] = goonv5.Motion.bfsDist[goonv5.Motion.stepOffset + 6];
         goonv5.Motion.bfsCurr[7] = goonv5.Motion.bfsDist[goonv5.Motion.stepOffset + 7];
         goonv5.Motion.bfsCurr[8] = goonv5.Motion.bfsDist[goonv5.Motion.stepOffset + 8];
-        goonv5.Motion.bfsCurr[9] = goonv5.Motion.bfsDist[goonv5.Motion.stepOffset + 9];
-        goonv5.Motion.bfsCurr[10] = goonv5.Motion.bfsDist[goonv5.Motion.stepOffset + 10];
-        goonv5.Motion.bfsCurr[11] = goonv5.Motion.bfsDist[Motion.stepOffset + 11];
+        goonv5.Motion.bfsCurr[9] = goonv4.Motion.bfsDist[goonv4.Motion.stepOffset + 9];
+        goonv4.Motion.bfsCurr[10] = goonv4.Motion.bfsDist[goonv4.Motion.stepOffset + 10];
+        goonv4.Motion.bfsCurr[11] = goonv4.Motion.bfsDist[Motion.stepOffset + 11];
         Motion.bfsCurr[12] = Motion.bfsDist[Motion.stepOffset + 12];
         Motion.bfsCurr[13] = Motion.bfsDist[Motion.stepOffset + 13];
         Motion.bfsCurr[14] = Motion.bfsDist[Motion.stepOffset + 14];

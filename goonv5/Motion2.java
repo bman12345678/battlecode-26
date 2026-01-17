@@ -4,12 +4,8 @@ import battlecode.common.Clock;
 import battlecode.common.Direction;
 import battlecode.common.MapInfo;
 import battlecode.common.MapLocation;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Random;
 
-
-public class Motion {
+public class Motion2 {
     public static final int TOWARDS = 0;
     public static final int AWAY = 1;
     public static final int AROUND = 2;
@@ -24,18 +20,6 @@ public class Motion {
 
     public static Direction lastRandomDir = Direction.CENTER;
     public static MapLocation lastRandomSpread;
-    // visual-only turn scheduling (per-robot)
-    private static final Map<Integer,Integer> visualTurnInterval = new HashMap<>();   // 2..4
-    private static final Map<Integer,Integer> visualTurnCounter  = new HashMap<>();   // counts calls
-    private static final Map<Integer,Boolean> visualTurnDirRight  = new HashMap<>();  // true => next turn is right90, false => left90
-    private static final long VISUAL_SEED_MIX = 0x9E3779B97F4A7C15L;
-    // post-move turn scheduling to produce the (move, side-turn, back-turn, move) pattern
-    public static boolean postMoveSideTurnPending = false;   // when true, next tick should perform the side turn
-    public static boolean postSideTurnBackPending = false;   // when true, next tick should turn back to face desired
-    public static boolean nextSideTurnRight = true;          // toggles side each successful move (true=>right, false=>left)
-    public static Direction scheduledSideDir = Direction.CENTER; // stores which side (90°) to turn when pending
-
-
 
     // common distance stuff
     public static int getManhattanDistance(MapLocation a, MapLocation b) {
@@ -47,7 +31,7 @@ public class Motion {
     }
 
     public static MapLocation getClosest(MapLocation[] a) throws Exception {
-        return getClosest(a, G.rc.getLocation());
+        return getClosest(a, goonv5.G.rc.getLocation());
     }
 
     public static MapLocation getClosest(MapLocation[] a, MapLocation me) throws Exception {
@@ -83,7 +67,7 @@ public class Motion {
 
     public static MapLocation getFarthest(MapLocation[] a) throws Exception {
         /* Get farthest MapLocation to this robot (Euclidean) */
-        return getFarthest(a, G.rc.getLocation());
+        return getFarthest(a, goonv5.G.rc.getLocation());
     }
 
     public static MapLocation getFarthest(MapLocation[] a, MapLocation me) throws Exception {
@@ -102,10 +86,10 @@ public class Motion {
 
     // basic random movement
     public static void moveRandomly() throws Exception {
-        if (G.rc.isMovementReady()) {
+        if (goonv5.G.rc.isMovementReady()) {
             boolean stuck = true;
-            for (int i = G.DIRECTIONS.length; --i >= 0;) {
-                if (G.rc.canMove(G.DIRECTIONS[i])) {
+            for (int i = goonv5.G.DIRECTIONS.length; --i >= 0;) {
+                if (goonv5.G.rc.canMove(goonv5.G.DIRECTIONS[i])) {
                     stuck = false;
                 }
             }
@@ -114,8 +98,8 @@ public class Motion {
             }
             // move in a random direction but minimize making useless moves back to where
             // you came from
-            Direction direction = G.DIRECTIONS[G.rng.nextInt(G.DIRECTIONS.length)];
-            if (direction == lastRandomDir.opposite() && G.rc.canMove(direction.opposite())) {
+            Direction direction = goonv5.G.DIRECTIONS[goonv5.G.rng.nextInt(goonv5.G.DIRECTIONS.length)];
+            if (direction == lastRandomDir.opposite() && goonv5.G.rc.canMove(direction.opposite())) {
                 direction = direction.opposite();
             }
             if (move(direction)) {
@@ -126,34 +110,34 @@ public class Motion {
 
     public static void spreadRandomly() throws Exception {
         boolean stuck = true;
-        for (int i = G.DIRECTIONS.length; --i >= 0;) {
-            if (canMove(G.DIRECTIONS[i])) {
+        for (int i = goonv5.G.DIRECTIONS.length; --i >= 0;) {
+            if (canMove(goonv5.G.DIRECTIONS[i])) {
                 stuck = false;
             }
         }
         if (stuck) {
             return;
         }
-        if (G.rc.isMovementReady()) {
-            MapLocation me = G.rc.getLocation();
+        if (goonv5.G.rc.isMovementReady()) {
+            MapLocation me = goonv5.G.rc.getLocation();
             MapLocation target = me;
-            for (int i = G.allyRobots.length; --i >= 0;) {
-                if (!G.allyRobots[i].type.isRobotType())
+            for (int i = goonv5.G.allyRobots.length; --i >= 0;) {
+                if (!goonv5.G.allyRobots[i].type.isRobotType())
                     // ignore towers
-                    target = target.subtract(me.directionTo(G.allyRobots[i].getLocation()));
+                    target = target.subtract(me.directionTo(goonv5.G.allyRobots[i].getLocation()));
             }
             for (int i = 7; --i >= 0;) {
-                if (!G.rc.canMove(G.DIRECTIONS[i])) {
-                    target = target.subtract(G.DIRECTIONS[i]);
+                if (!goonv5.G.rc.canMove(goonv5.G.DIRECTIONS[i])) {
+                    target = target.subtract(goonv5.G.DIRECTIONS[i]);
                 }
             }
             if (target.equals(me)) {
                 // just keep moving in the same direction as before if there's no robots nearby
-                if (G.rc.getRoundNum() % 3 == 0 || lastRandomSpread == null) {
+                if (goonv5.G.rc.getRoundNum() % 3 == 0 || lastRandomSpread == null) {
                     moveRandomly(); // occasionally move randomly to avoid getting stuck
-                } else if (G.rng.nextInt(20) == 1) {
+                } else if (goonv5.G.rng.nextInt(20) == 1) {
                     // don't get stuck in corners
-                    lastRandomSpread = me.add(G.DIRECTIONS[G.rng.nextInt(G.DIRECTIONS.length)]);
+                    lastRandomSpread = me.add(goonv5.G.DIRECTIONS[goonv5.G.rng.nextInt(goonv5.G.DIRECTIONS.length)]);
                     moveRandomly();
                 } else {
                     // Direction direction = bug2Helper(me, lastRandomSpread, TOWARDS, 0, 0);
@@ -188,10 +172,10 @@ public class Motion {
     public static StringBuilder visitedList = new StringBuilder();
 
     public static int[] simulateMovement(MapLocation me, MapLocation dest) throws Exception {
-        MapLocation clockwiseLoc = G.rc.getLocation();
+        MapLocation clockwiseLoc = goonv5.G.rc.getLocation();
         Direction clockwiseLastDir = lastDir;
         int clockwiseStuck = 0;
-        MapLocation counterClockwiseLoc = G.rc.getLocation();
+        MapLocation counterClockwiseLoc = goonv5.G.rc.getLocation();
         Direction counterClockwiseLastDir = lastDir;
         int counterClockwiseStuck = 0;
         search: for (int t = 0; t < 10; t++) {
@@ -205,12 +189,12 @@ public class Motion {
             {
                 for (int i = 9; --i >= 0;) {
                     MapLocation loc = clockwiseLoc.add(clockwiseDir);
-                    if (G.rc.onTheMap(loc)) {
-                        if (!G.rc.canSenseLocation(loc)) {
+                    if (goonv5.G.rc.onTheMap(loc)) {
+                        if (!goonv5.G.rc.canSenseLocation(loc)) {
                             break search;
                         }
-                        if (clockwiseDir != clockwiseLastDir.opposite() && G.rc.senseMapInfo(loc).isPassable()
-                                && G.rc.senseRobotAtLocation(loc) == null) {
+                        if (clockwiseDir != clockwiseLastDir.opposite() && goonv5.G.rc.senseMapInfo(loc).isPassable()
+                                && goonv5.G.rc.senseRobotAtLocation(loc) == null) {
                             clockwiseLastDir = clockwiseDir;
                             break;
                         }
@@ -226,12 +210,12 @@ public class Motion {
             {
                 for (int i = 9; --i >= 0;) {
                     MapLocation loc = counterClockwiseLoc.add(counterClockwiseDir);
-                    if (G.rc.onTheMap(loc)) {
-                        if (!G.rc.canSenseLocation(loc)) {
+                    if (goonv5.G.rc.onTheMap(loc)) {
+                        if (!goonv5.G.rc.canSenseLocation(loc)) {
                             break search;
                         }
                         if (counterClockwiseDir != counterClockwiseLastDir.opposite()
-                                && G.rc.senseMapInfo(loc).isPassable() && G.rc.senseRobotAtLocation(loc) == null) {
+                                && goonv5.G.rc.senseMapInfo(loc).isPassable() && goonv5.G.rc.senseRobotAtLocation(loc) == null) {
                             counterClockwiseLastDir = counterClockwiseDir;
                             break;
                         }
@@ -292,7 +276,7 @@ public class Motion {
 
         // G.indicatorString.append("DIR=" + direction + " ");
         if (optimalDir != Direction.CENTER && mode != AROUND) {
-            if (G.rc.canMove(optimalDir) && lastDir != optimalDir.opposite()) {
+            if (goonv5.G.rc.canMove(optimalDir) && lastDir != optimalDir.opposite()) {
                 optimalDir = Direction.CENTER;
                 rotation = NONE;
                 visitedList = new StringBuilder();
@@ -307,7 +291,7 @@ public class Motion {
         // G.indicatorString.append("OFF: " + G.rc.onTheMap(me.add(direction)) + " ");
 
         if (lastDir != direction.opposite()) {
-            if (G.rc.canMove(direction)) {
+            if (goonv5.G.rc.canMove(direction)) {
                 // if (!lastBlocked) {
                 // rotation = NONE;
                 // }
@@ -327,14 +311,14 @@ public class Motion {
                 // }
                 return direction;
             }
-        } else if (G.rc.canMove(direction)) {
+        } else if (goonv5.G.rc.canMove(direction)) {
             Direction dir;
             if (rotation == CLOCKWISE) {
                 dir = direction.rotateRight();
             } else {
                 dir = direction.rotateLeft();
             }
-            if (!G.rc.onTheMap(me.add(dir))) {
+            if (!goonv5.G.rc.onTheMap(me.add(dir))) {
                 // boolean touchingTheWallBefore = false;
                 // for (int i = DIRECTIONS.length; --i>=0;) {
                 // MapLocation translatedMapLocation = me.add(d);
@@ -352,7 +336,7 @@ public class Motion {
                 return direction;
             }
         }
-        if (!G.rc.onTheMap(me.add(direction))) {
+        if (!goonv5.G.rc.onTheMap(me.add(direction))) {
             if (mode == AROUND) {
                 circleDirection *= -1;
                 direction = direction.opposite();
@@ -360,7 +344,7 @@ public class Motion {
             } else {
                 direction = me.directionTo(dest);
             }
-            if (G.rc.canMove(direction)) {
+            if (goonv5.G.rc.canMove(direction)) {
                 return direction;
             }
         }
@@ -422,7 +406,7 @@ public class Motion {
             } else {
                 direction = direction.rotateLeft();
             }
-            if (!G.rc.onTheMap(me.add(direction))) {
+            if (!goonv5.G.rc.onTheMap(me.add(direction))) {
                 flip = true;
             }
             // if (G.rc.onTheMap(me.add(direction)) &&
@@ -433,11 +417,11 @@ public class Motion {
             // }
             // return Direction.CENTER;
             // }
-            if (G.rc.canMove(direction) && lastDir != direction.opposite()) {
+            if (goonv5.G.rc.canMove(direction) && lastDir != direction.opposite()) {
                 if (flip) {
                     rotation *= -1;
                 }
-                if (G.rc.canMove(direction)) {
+                if (goonv5.G.rc.canMove(direction)) {
                     return direction;
                 }
                 return Direction.CENTER;
@@ -446,7 +430,7 @@ public class Motion {
         if (flip) {
             rotation *= -1;
         }
-        if (G.rc.canMove(lastDir.opposite())) {
+        if (goonv5.G.rc.canMove(lastDir.opposite())) {
             return lastDir.opposite();
         }
         return Direction.CENTER;
@@ -462,116 +446,12 @@ public class Motion {
         bugnavTowards(dest, defaultMicroNoTurn);
     }
     public static void bugnavTowards(MapLocation dest, Micro m) throws Exception {
-        // If neither movement nor the ability to turn exists, nothing to do.
-        if (!(G.rc.isMovementReady() || true)) { // keep cheap guard; we always check canTurn below
-            return;
-        }
-        if (m == defaultMicroNoTurn) {
-            if (G.rc.isMovementReady()) {
-                Direction d = bug2Helper(G.rc.getLocation(), dest, TOWARDS, 0, 0);
-                if (d == Direction.CENTER) {
-                    d = G.rc.getLocation().directionTo(dest);
-                }
-                m.micro(d, dest);
+        if (goonv5.G.rc.isMovementReady()) {
+            Direction d = bug2Helper(goonv5.G.rc.getLocation(), dest, TOWARDS, 0, 0);
+            if (d == Direction.CENTER) {
+                d = goonv5.G.rc.getLocation().directionTo(dest);
             }
-        }
-        // compute desired movement direction
-        Direction desired = bug2Helper(G.rc.getLocation(), dest, TOWARDS, 0, 0);
-        if (desired == Direction.CENTER) desired = G.rc.getLocation().directionTo(dest);
-
-
-        // authoritative robot facing
-        Direction facing;
-        try { facing = G.rc.getDirection(); } catch (Exception ex) { facing = lastDir; }
-
-        // If movement not ready: pre-orient to desired if possible so next tick we will be in "turn+move" case.
-        if (!G.rc.isMovementReady()) {
-            if (G.rc.canTurn(desired) && facing != desired) {
-                try { G.rc.turn(desired); } catch (Exception ignore) {}
-            }
-            return;
-        }
-
-        // Movement is ready -- we MUST attempt to move this tick.
-
-        // Decide the 90° side-turn (use two rotates for 90 degrees)
-        Direction side90Right = desired.rotateRight().rotateRight();
-        Direction side90Left = desired.rotateLeft().rotateLeft();
-
-        // CASE 1: Not facing desired -> prefer turn then move (both in same tick) if possible
-        if (facing != desired) {
-            // If we can turn to desired and the destination tile is movable, do turn then move in same tick.
-            if (G.rc.canTurn(desired) && G.rc.canMove(desired)) {
-                try {
-                    G.rc.turn(desired); // turn to desired
-                } catch (Exception ignore) {}
-                // attempt to move forward now that we're facing desired
-                if (G.rc.canMove(desired)) {
-                    try {
-                        G.rc.move(desired);
-                        lastDir = desired;
-                        RobotPlayer.updateInfo();
-                    } catch (Exception ignore) {}
-                }
-                // after this turn+move, we want the next cycle to do move->side-turn behavior.
-                return;
-            }
-
-            // fallback: cannot both turn+move this tick (e.g. canTurn false or desired blocked).
-            // Still move this tick (micro picks best forward-ish move) — never stall.
-            MapLocation before = G.rc.getLocation();
-            m.micro(desired, dest);
-            MapLocation after = G.rc.getLocation();
-            if (!before.equals(after)) {
-                // optionally attempt immediate side-turn after the micro-move if we can (keeps pattern smooth)
-                Direction movementDir = lastDir != Direction.CENTER ? lastDir : desired;
-                Direction side = nextSideTurnRight ? movementDir.rotateRight().rotateRight() : movementDir.rotateLeft().rotateLeft();
-                if (G.rc.canTurn(side)) {
-                    try { G.rc.turn(side); } catch (Exception ignore) {}
-                    // toggling side only when a side-turn actually happens
-                    nextSideTurnRight = !nextSideTurnRight;
-                }
-            }
-            return;
-        }
-
-        // CASE 2: Facing desired -> move forward then do a 90° side-turn (if possible) in the same tick.
-        if (G.rc.canMove(desired)) {
-            MapLocation before = G.rc.getLocation();
-            // move forward without turning (preserve action for side-turn)
-            moveNoTurn(desired);
-            MapLocation after = G.rc.getLocation();
-            boolean moved = !before.equals(after);
-
-            if (moved) {
-                // determine which 90° side to use (alternating)
-                Direction side = nextSideTurnRight ? side90Right : side90Left;
-                // try to perform 90° side-turn immediately (in same tick) if possible
-                if (G.rc.canTurn(side)) {
-                    try { G.rc.turn(side); } catch (Exception ignore) {}
-                    // only toggle if the side-turn actually happened (canTurn checked)
-                    nextSideTurnRight = !nextSideTurnRight;
-                } else {
-                    // cannot side-turn this tick; fallback: do nothing (we still moved),
-                    // next tick we'll be in the "not facing desired" branch and will try to turn+move.
-                }
-            }
-            return;
-        }
-
-        // If we reach here, we were facing desired but forward is blocked.
-        // Use micro to choose best alternative move (still prioritize moving).
-        MapLocation before = G.rc.getLocation();
-        m.micro(desired, dest);
-        MapLocation after = G.rc.getLocation();
-        boolean moved = !before.equals(after);
-        if (moved) {
-            Direction movementDir = lastDir != Direction.CENTER ? lastDir : desired;
-            Direction side = nextSideTurnRight ? movementDir.rotateRight().rotateRight() : movementDir.rotateLeft().rotateLeft();
-            if (G.rc.canTurn(side)) {
-                try { G.rc.turn(side); } catch (Exception ignore) {}
-                nextSideTurnRight = !nextSideTurnRight;
-            }
+            m.micro(d, dest);
         }
     }
 
@@ -583,10 +463,10 @@ public class Motion {
         bugnavAway(dest, defaultMicroNoTurn);
     }
     public static void bugnavAway(MapLocation dest, Micro m) throws Exception {
-        if (G.rc.isMovementReady()) {
-            Direction d = bug2Helper(G.rc.getLocation(), dest, AWAY, 0, 0);
+        if (goonv5.G.rc.isMovementReady()) {
+            Direction d = bug2Helper(goonv5.G.rc.getLocation(), dest, AWAY, 0, 0);
             if (d == Direction.CENTER) {
-                d = G.rc.getLocation().directionTo(dest);
+                d = goonv5.G.rc.getLocation().directionTo(dest);
             }
             m.micro(d, dest);
         }
@@ -596,10 +476,10 @@ public class Motion {
         bugnavAround(dest, minRadiusSquared, maxRadiusSquared, defaultMicro);
     }
     public static void bugnavAround(MapLocation dest, int minRadiusSquared, int maxRadiusSquared, Micro m) throws Exception {
-        if (G.rc.isMovementReady()) {
-            Direction d = bug2Helper(G.rc.getLocation(), dest, AROUND, minRadiusSquared, maxRadiusSquared);
+        if (goonv5.G.rc.isMovementReady()) {
+            Direction d = bug2Helper(goonv5.G.rc.getLocation(), dest, AROUND, minRadiusSquared, maxRadiusSquared);
             if (d == Direction.CENTER) {
-                d = G.rc.getLocation().directionTo(dest);
+                d = goonv5.G.rc.getLocation().directionTo(dest);
             }
             m.micro(d, dest);
         }
@@ -614,8 +494,8 @@ public class Motion {
     public static final int MAX_PATH_LENGTH = 100;
 
     public static void bfsInit() {
-        width = G.rc.getMapWidth();
-        height = G.rc.getMapHeight();
+        width = goonv5.G.rc.getMapWidth();
+        height = goonv5.G.rc.getMapHeight();
         bfsMap = new long[height + 2];
         bfsCurr = new long[height + 2];
         bfsDist = new long[(height + 2) * MAX_PATH_LENGTH];
@@ -630,7 +510,7 @@ public class Motion {
     public static int recalculationNeeded = MAX_PATH_LENGTH;
 
     public static void updateBfsMap() throws Exception {
-        MapInfo[] map = G.rc.senseNearbyMapInfos();
+        MapInfo[] map = goonv5.G.rc.senseNearbyMapInfos();
         for (int i = map.length; --i >= 0;) {
             MapInfo m = map[i];
             if (m.isWall()) {
@@ -660,7 +540,7 @@ public class Motion {
                 bfsCurr[i] = bfsDist[step * (height + 2) + i];
             }
             step += 1;
-            G.indicatorString.append("BFS-RECALC ");
+            goonv5.G.indicatorString.append("BFS-RECALC ");
         }
         recalculationNeeded = MAX_PATH_LENGTH;
 
@@ -668,124 +548,124 @@ public class Motion {
             stepOffset = step * (height + 2);
             switch (height) {
                 case 20:
-                    MotionCodeGen.bfs20();
+                    goonv5.MotionCodeGen.bfs20();
                     break;
                 case 21:
-                    MotionCodeGen.bfs21();
+                    goonv5.MotionCodeGen.bfs21();
                     break;
                 case 22:
-                    MotionCodeGen.bfs22();
+                    goonv5.MotionCodeGen.bfs22();
                     break;
                 case 23:
-                    MotionCodeGen.bfs23();
+                    goonv5.MotionCodeGen.bfs23();
                     break;
                 case 24:
-                    MotionCodeGen.bfs24();
+                    goonv5.MotionCodeGen.bfs24();
                     break;
                 case 25:
-                    MotionCodeGen.bfs25();
+                    goonv5.MotionCodeGen.bfs25();
                     break;
                 case 26:
-                    MotionCodeGen.bfs26();
+                    goonv5.MotionCodeGen.bfs26();
                     break;
                 case 27:
-                    MotionCodeGen.bfs27();
+                    goonv5.MotionCodeGen.bfs27();
                     break;
                 case 28:
-                    MotionCodeGen.bfs28();
+                    goonv5.MotionCodeGen.bfs28();
                     break;
                 case 29:
-                    MotionCodeGen.bfs29();
+                    goonv5.MotionCodeGen.bfs29();
                     break;
                 case 30:
-                    MotionCodeGen.bfs30();
+                    goonv5.MotionCodeGen.bfs30();
                     break;
                 case 31:
-                    MotionCodeGen.bfs31();
+                    goonv5.MotionCodeGen.bfs31();
                     break;
                 case 32:
-                    MotionCodeGen.bfs32();
+                    goonv5.MotionCodeGen.bfs32();
                     break;
                 case 33:
-                    MotionCodeGen.bfs33();
+                    goonv5.MotionCodeGen.bfs33();
                     break;
                 case 34:
-                    MotionCodeGen.bfs34();
+                    goonv5.MotionCodeGen.bfs34();
                     break;
                 case 35:
-                    MotionCodeGen.bfs35();
+                    goonv5.MotionCodeGen.bfs35();
                     break;
                 case 36:
-                    MotionCodeGen.bfs36();
+                    goonv5.MotionCodeGen.bfs36();
                     break;
                 case 37:
-                    MotionCodeGen.bfs37();
+                    goonv5.MotionCodeGen.bfs37();
                     break;
                 case 38:
-                    MotionCodeGen.bfs38();
+                    goonv5.MotionCodeGen.bfs38();
                     break;
                 case 39:
-                    MotionCodeGen.bfs39();
+                    goonv5.MotionCodeGen.bfs39();
                     break;
                 case 40:
-                    MotionCodeGen.bfs40();
+                    goonv5.MotionCodeGen.bfs40();
                     break;
                 case 41:
-                    MotionCodeGen.bfs41();
+                    goonv5.MotionCodeGen.bfs41();
                     break;
                 case 42:
-                    MotionCodeGen.bfs42();
+                    goonv5.MotionCodeGen.bfs42();
                     break;
                 case 43:
-                    MotionCodeGen.bfs43();
+                    goonv5.MotionCodeGen.bfs43();
                     break;
                 case 44:
-                    MotionCodeGen.bfs44();
+                    goonv5.MotionCodeGen.bfs44();
                     break;
                 case 45:
-                    MotionCodeGen.bfs45();
+                    goonv5.MotionCodeGen.bfs45();
                     break;
                 case 46:
-                    MotionCodeGen.bfs46();
+                    goonv5.MotionCodeGen.bfs46();
                     break;
                 case 47:
-                    MotionCodeGen.bfs47();
+                    goonv5.MotionCodeGen.bfs47();
                     break;
                 case 48:
-                    MotionCodeGen.bfs48();
+                    goonv5.MotionCodeGen.bfs48();
                     break;
                 case 49:
-                    MotionCodeGen.bfs49();
+                    goonv5.MotionCodeGen.bfs49();
                     break;
                 case 50:
-                    MotionCodeGen.bfs50();
+                    goonv5.MotionCodeGen.bfs50();
                     break;
                 case 51:
-                    MotionCodeGen.bfs51();
+                    goonv5.MotionCodeGen.bfs51();
                     break;
                 case 52:
-                    MotionCodeGen.bfs52();
+                    goonv5.MotionCodeGen.bfs52();
                     break;
                 case 53:
-                    MotionCodeGen.bfs53();
+                    goonv5.MotionCodeGen.bfs53();
                     break;
                 case 54:
-                    MotionCodeGen.bfs54();
+                    goonv5.MotionCodeGen.bfs54();
                     break;
                 case 55:
-                    MotionCodeGen.bfs55();
+                    goonv5.MotionCodeGen.bfs55();
                     break;
                 case 56:
-                    MotionCodeGen.bfs56();
+                    goonv5.MotionCodeGen.bfs56();
                     break;
                 case 57:
-                    MotionCodeGen.bfs57();
+                    goonv5.MotionCodeGen.bfs57();
                     break;
                 case 58:
-                    MotionCodeGen.bfs58();
+                    goonv5.MotionCodeGen.bfs58();
                     break;
                 case 59:
-                    MotionCodeGen.bfs59();
+                    goonv5.MotionCodeGen.bfs59();
                     break;
                 case 60:
                     MotionCodeGen.bfs60();
@@ -845,11 +725,11 @@ public class Motion {
         // }
         // }
         // }
-        G.indicatorString.append("BFS-STP=" + step + " ");
+        goonv5.G.indicatorString.append("BFS-STP=" + step + " ");
     }
 
     public static Direction getBfsDirection(MapLocation dest) throws Exception {
-        MapLocation me = G.rc.getLocation();
+        MapLocation me = goonv5.G.rc.getLocation();
 
         boolean[] directions = new boolean[9];
         for (int i = 1; i < step; i++) {
@@ -891,7 +771,7 @@ public class Motion {
         for (int i = 9; --i >= 0;) {
             if (directions[i]) {
                 Direction dir = Direction.DIRECTION_ORDER[i];
-                if (G.rc.canMove(dir)) {
+                if (goonv5.G.rc.canMove(dir)) {
                     if (me.add(dir).distanceSquaredTo(dest) < minDist) {
                         optimalDirection = dir;
                         minDist = me.add(dir).distanceSquaredTo(dest);
@@ -904,7 +784,7 @@ public class Motion {
         }
         if (optimalDirection == Direction.CENTER) {
             optimalDirection = bug2Helper(me, dest, TOWARDS, 0, 0);
-            G.indicatorString.append("BFS-BUG ");
+            goonv5.G.indicatorString.append("BFS-BUG ");
 
             if (canMove(optimalDirection)) {
                 return optimalDirection;
@@ -920,13 +800,13 @@ public class Motion {
         bfsnav(dest, defaultMicro);
     }
     public static void bfsnav(MapLocation dest, Micro m) throws Exception {
-        G.indicatorString.append("BFS-BT: " + Clock.getBytecodesLeft() + "-");
+        goonv5.G.indicatorString.append("BFS-BT: " + Clock.getBytecodesLeft() + "-");
         updateBfsTarget(dest);
 
-        if (!G.rc.getLocation().equals(dest) && G.rc.isMovementReady()) {
+        if (!goonv5.G.rc.getLocation().equals(dest) && goonv5.G.rc.isMovementReady()) {
             Direction d = getBfsDirection(dest);
             if (d == Direction.CENTER) {
-                d = G.rc.getLocation().directionTo(dest);
+                d = goonv5.G.rc.getLocation().directionTo(dest);
             }
             m.micro(d, dest);
         } else {
@@ -1044,7 +924,7 @@ public class Motion {
             // ADD THIS BACK
         }
         bfs();
-        G.indicatorString.append(Clock.getBytecodesLeft() + " ");
+        goonv5.G.indicatorString.append(Clock.getBytecodesLeft() + " ");
     }
 
     public static void updateBfsTarget(MapLocation dest) throws Exception {
@@ -1066,26 +946,26 @@ public class Motion {
             Direction best = d;
             int bestScore = Integer.MIN_VALUE;
             for (int i = 7; --i >= 0; ) {
-                if (!G.rc.canMove(G.DIRECTIONS[i])) continue;
+                if (!goonv5.G.rc.canMove(goonv5.G.DIRECTIONS[i])) continue;
                 int score = 0;
-                MapLocation nxt = G.me.add(G.DIRECTIONS[i]);
+                MapLocation nxt = goonv5.G.me.add(goonv5.G.DIRECTIONS[i]);
 
                 // Only sense if we can actually see that location
-                if (G.rc.canSenseLocation(nxt)) {
-                    MapInfo info = G.rc.senseMapInfo(nxt);
+                if (goonv5.G.rc.canSenseLocation(nxt)) {
+                    MapInfo info = goonv5.G.rc.senseMapInfo(nxt);
                     /*
                     if (info.getPaint().isEnemy()) score -= 10;
                     else if (info.getPaint() == PaintType.EMPTY) score -= 5;
                     */
                 }
 
-                if (G.DIRECTIONS[i] == d) {
+                if (goonv5.G.DIRECTIONS[i] == d) {
                     score += 20;
-                } else if (G.DIRECTIONS[i].rotateLeft() == d || G.DIRECTIONS[i].rotateRight() == d) {
+                } else if (goonv5.G.DIRECTIONS[i].rotateLeft() == d || goonv5.G.DIRECTIONS[i].rotateRight() == d) {
                     score += 10;
                 }
                 if (score > bestScore) {
-                    best = G.DIRECTIONS[i];
+                    best = goonv5.G.DIRECTIONS[i];
                     bestScore = score;
                 }
             }
@@ -1100,17 +980,17 @@ public class Motion {
             Direction best = d;
             int bestScore = Integer.MIN_VALUE;
             for (int i = 7; --i >= 0; ) {
-                if (!G.rc.canMove(G.DIRECTIONS[i])) continue;
+                if (!goonv5.G.rc.canMove(goonv5.G.DIRECTIONS[i])) continue;
                 int score = 0;
-                MapLocation nxt = G.me.add(G.DIRECTIONS[i]);
+                MapLocation nxt = goonv5.G.me.add(goonv5.G.DIRECTIONS[i]);
 
-                if (G.DIRECTIONS[i] == d) {
+                if (goonv5.G.DIRECTIONS[i] == d) {
                     score += 20;
-                } else if (G.DIRECTIONS[i].rotateLeft() == d || G.DIRECTIONS[i].rotateRight() == d) {
+                } else if (goonv5.G.DIRECTIONS[i].rotateLeft() == d || goonv5.G.DIRECTIONS[i].rotateRight() == d) {
                     score += 10;
                 }
                 if (score > bestScore) {
-                    best = G.DIRECTIONS[i];
+                    best = goonv5.G.DIRECTIONS[i];
                     bestScore = score;
                 }
             }
