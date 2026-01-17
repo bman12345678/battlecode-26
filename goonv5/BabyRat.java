@@ -91,6 +91,7 @@ public class BabyRat {
 
 
         if(G.rc.getCarrying() != null)  {
+            roundsCarrying += 1;
             if(roundsCarrying >= 8) {
                 Motion.turn(G.rc.getDirection().opposite());
             }
@@ -509,7 +510,7 @@ public class BabyRat {
 
 
 
-        if(G.rc.getCurrentRatCost() > 100 && G.rc.getGlobalCheese() > 2000 && G.rc.getRoundNum() < 1200) {
+        if(G.rc.getCurrentRatCost() > 80 && G.rc.getGlobalCheese() > 1500 && G.rc.getRoundNum() < 1200) {
 
             if(enemyRobots.length == 0) G.rc.squeak(16384 * (1024 * (1024 * G.rc.getLocation().x + G.rc.getLocation().y) + G.rc.getID()) + 1);
 
@@ -794,3 +795,4 @@ public class BabyRat {
         }
     }
 }
+
