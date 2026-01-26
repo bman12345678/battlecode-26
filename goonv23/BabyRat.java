@@ -1011,7 +1011,7 @@ public class BabyRat {
             babyRatMicro();
             int rand = G.rc.getID() % 1000+50;
             if (G.rc.getRawCheese() > 0) MotionCodeGen.bugnavTowardsExplore(king);
-            else if (G.rc.isMovementReady() && (rand>=mineset.size()*30+Math.min(500,G.rc.getRoundNum()) || (!mineLogic()))) {
+            else if (G.rc.isMovementReady() && (rand>=mineset.size()*30+Math.max(300,G.rc.getRoundNum()) || (!mineLogic()))) {
                 G.indicatorString.append("  spreading  ");
                 spreadingBehavior();
             }
